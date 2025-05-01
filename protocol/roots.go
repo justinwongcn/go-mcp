@@ -1,37 +1,41 @@
 package protocol
 
-// ListRootsRequest represents a request to list root directories
+// ListRootsRequest 表示列出根目录的请求
 type ListRootsRequest struct{}
 
-// ListRootsResult represents the response to a list roots request
+// ListRootsResult 表示列出根目录的响应
+// Roots: 根目录列表
 type ListRootsResult struct {
 	Roots []Root `json:"roots"`
 }
 
-// Root represents a root directory or file that the server can operate on
+// Root 表示服务器可以操作的根目录或文件
+// Name: 根目录名称(可选)
+// URI: 根目录URI
 type Root struct {
 	Name string `json:"name,omitempty"`
 	URI  string `json:"uri"`
 }
 
-// RootsListChangedNotification represents a notification that the roots list has changed
+// RootsListChangedNotification 表示根目录列表变更通知
 type RootsListChangedNotification struct {
 	Meta map[string]interface{} `json:"_meta,omitempty"`
 }
 
-// NewListRootsRequest creates a new list roots request
+// NewListRootsRequest 创建新的列出根目录请求
 func NewListRootsRequest() *ListRootsRequest {
 	return &ListRootsRequest{}
 }
 
-// NewListRootsResult creates a new list roots response
+// NewListRootsResult 创建新的列出根目录响应
+// roots: 根目录列表
 func NewListRootsResult(roots []Root) *ListRootsResult {
 	return &ListRootsResult{
 		Roots: roots,
 	}
 }
 
-// NewRootsListChangedNotification creates a new roots list changed notification
+// NewRootsListChangedNotification 创建新的根目录列表变更通知
 func NewRootsListChangedNotification() *RootsListChangedNotification {
 	return &RootsListChangedNotification{}
 }

@@ -11,6 +11,21 @@ import (
 	"github.com/ThinkInAIXYZ/go-mcp/server/session"
 )
 
+// Ping 处理Ping请求
+// 参数说明：
+//   - ctx: 上下文，包含会话ID等信息
+//   - request: Ping请求参数
+//
+// 返回值：
+//   - *protocol.PingResult: Ping响应结果
+//   - error: 错误信息
+//
+// 功能流程：
+//  1. 从上下文中获取会话ID
+//  2. 调用客户端方法发送Ping请求
+//  3. 解析并返回响应结果
+//
+// [注意] 需确保会话存在且有效
 func (server *Server) Ping(ctx context.Context, request *protocol.PingRequest) (*protocol.PingResult, error) {
 	sessionID, err := getSessionIDFromCtx(ctx)
 	if err != nil {
@@ -29,6 +44,21 @@ func (server *Server) Ping(ctx context.Context, request *protocol.PingRequest) (
 	return &result, nil
 }
 
+// Sampling 处理采样消息创建请求
+// 参数说明：
+//   - ctx: 上下文，包含会话ID等信息
+//   - request: 创建消息请求参数
+//
+// 返回值：
+//   - *protocol.CreateMessageResult: 创建结果
+//   - error: 错误信息
+//
+// 前置条件：
+//  1. 会话必须存在且有效
+//  2. 客户端必须支持Sampling功能
+//
+// 典型用例：
+//   - 客户端请求创建新的采样消息时调用
 func (server *Server) Sampling(ctx context.Context, request *protocol.CreateMessageRequest) (*protocol.CreateMessageResult, error) {
 	sessionID, err := getSessionIDFromCtx(ctx)
 	if err != nil {
@@ -121,7 +151,29 @@ func (server *Server) SendNotification4ResourcesUpdated(ctx context.Context, not
 	return pkg.JoinErrors(errList)
 }
 
-// Responsible for request and response assembly
+// callClient 客户端调用核心方法
+// 参数说明：
+//   - ctx: 上下文，用于超时控制
+//   - sessionID: 目标会话ID
+//   - method: 调用的RPC方法
+//   - params: 请求参数
+//
+// 返回值：
+//   - json.RawMessage: 原始响应数据
+//   - error: 错误信息
+//
+// 核心流程：
+//  1. 验证会话有效性
+//  2. 生成唯一请求ID
+//  3. 创建响应通道并注册
+//  4. 发送请求消息
+//  5. 等待响应或超时
+//
+// [重要] 线程安全：
+//   - 使用会话状态中的并发安全映射表管理请求
+//
+// 性能提示：
+//   - 响应通道缓冲区大小为1，避免阻塞
 func (server *Server) callClient(ctx context.Context, sessionID string, method protocol.Method, params protocol.ServerRequest) (json.RawMessage, error) {
 	session, ok := server.sessionManager.GetSession(sessionID)
 	if !ok {

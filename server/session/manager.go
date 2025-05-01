@@ -9,18 +9,29 @@ import (
 	"github.com/ThinkInAIXYZ/go-mcp/pkg"
 )
 
+// Manager 会话管理器核心结构
+// [重要] 线程安全设计：所有会话操作通过SyncMap保证并发安全
+// 模块功能：管理会话生命周期，包括创建/关闭/心跳检测/消息队列操作
+// 项目定位：server核心组件，负责维护所有活跃会话状态
 type Manager struct {
-	activeSessions pkg.SyncMap[*State]
-	closedSessions pkg.SyncMap[struct{}]
+	activeSessions pkg.SyncMap[*State]   // 活跃会话映射表
+	closedSessions pkg.SyncMap[struct{}] // 已关闭会话记录（防重复关闭）
 
-	stopHeartbeat chan struct{}
+	stopHeartbeat chan struct{} // 心跳检测停止信号
 
-	logger pkg.Logger
+	logger pkg.Logger // 日志记录器
 
-	detection   func(ctx context.Context, sessionID string) error
-	maxIdleTime time.Duration
+	detection   func(ctx context.Context, sessionID string) error // 会话健康检测函数
+	maxIdleTime time.Duration                                     // 会话最大空闲时间（0表示不限制）
 }
 
+// NewManager 创建会话管理器实例
+// 参数说明：
+//   - detection: 会话健康检测回调函数，返回nil表示会话健康
+//
+// 设计决策：
+//   - 使用默认日志器，可通过SetLogger()替换
+//   - 心跳检测通道初始化为无缓冲，确保及时停止
 func NewManager(detection func(ctx context.Context, sessionID string) error) *Manager {
 	return &Manager{
 		detection:     detection,
@@ -37,6 +48,15 @@ func (m *Manager) SetLogger(logger pkg.Logger) {
 	m.logger = logger
 }
 
+// CreateSession 创建新会话
+// 返回值：
+//   - string: 生成的唯一会话ID
+//
+// 算法说明：
+//   - 使用UUID v4生成唯一会话标识
+//   - 初始化会话状态结构体
+//
+// [注意] 并发安全：通过SyncMap.Store保证线程安全
 func (m *Manager) CreateSession() string {
 	sessionID := uuid.NewString()
 	state := NewState()
@@ -44,6 +64,15 @@ func (m *Manager) CreateSession() string {
 	return sessionID
 }
 
+// IsActiveSession 检查会话是否活跃
+// 参数说明：
+//   - sessionID: 要检查的会话ID
+//
+// 返回值：
+//   - bool: true表示会话存在且活跃
+//
+// 性能提示：
+//   - O(1)时间复杂度，基于并发安全哈希表查找
 func (m *Manager) IsActiveSession(sessionID string) bool {
 	_, has := m.activeSessions.Load(sessionID)
 	return has
@@ -54,6 +83,17 @@ func (m *Manager) IsClosedSession(sessionID string) bool {
 	return has
 }
 
+// GetSession 获取会话状态
+// 参数说明：
+//   - sessionID: 要获取的会话ID
+//
+// 返回值：
+//   - *State: 会话状态对象指针
+//   - bool: true表示获取成功
+//
+// [注意] 空会话ID会直接返回false
+// 典型用例：
+//   - 在消息收发前验证会话有效性
 func (m *Manager) GetSession(sessionID string) (*State, bool) {
 	if sessionID == "" {
 		return nil, false
@@ -115,6 +155,20 @@ func (m *Manager) CloseAllSessions() {
 	})
 }
 
+// StartHeartbeatAndCleanInvalidSessions 启动心跳检测和会话清理
+// 功能说明：
+//   - 每分钟检查一次所有会话状态
+//   - 清理条件：
+//     1. 会话超过最大空闲时间(maxIdleTime)
+//     2. 健康检测连续失败3次
+//
+// 设计决策：
+//   - 使用time.Ticker实现定时任务
+//   - 通过stopHeartbeat通道实现优雅停止
+//
+// [重要] 并发安全：
+//   - 使用Range方法保证遍历时的线程安全
+//   - 日志记录会话关闭原因便于问题排查
 func (m *Manager) StartHeartbeatAndCleanInvalidSessions() {
 	ticker := time.NewTicker(time.Minute)
 	defer ticker.Stop()

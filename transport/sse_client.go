@@ -1,3 +1,11 @@
+// Package transport 实现基于SSE的客户端传输逻辑
+// 模块功能：处理客户端与服务器之间的SSE连接和消息传输
+// 项目定位：go-mcp项目的核心传输组件
+// 版本历史：
+// - 2023-10-01 初始版本 (ThinkInAI)
+// 依赖说明：
+// - net/http: HTTP客户端实现
+// - github.com/ThinkInAIXYZ/go-mcp/pkg: 基础工具包
 package transport
 
 import (
@@ -14,26 +22,59 @@ import (
 	"github.com/ThinkInAIXYZ/go-mcp/pkg"
 )
 
+// SSEClientTransportOption 定义SSE客户端传输的配置选项类型
+// 用于通过函数式选项模式配置传输参数
 type SSEClientTransportOption func(*sseClientTransport)
 
+// WithSSEClientOptionReceiveTimeout 设置SSE接收超时时间
+// 输入参数：
+// - timeout: 超时时间
+// 返回值：
+// - SSEClientTransportOption: 配置函数
+// [注意] 超时时间必须大于0
 func WithSSEClientOptionReceiveTimeout(timeout time.Duration) SSEClientTransportOption {
 	return func(t *sseClientTransport) {
 		t.receiveTimeout = timeout
 	}
 }
 
+// WithSSEClientOptionHTTPClient 设置自定义HTTP客户端
+// 输入参数：
+// - client: 自定义HTTP客户端实例
+// 返回值：
+// - SSEClientTransportOption: 配置函数
+// [注意] 客户端必须支持长连接
 func WithSSEClientOptionHTTPClient(client *http.Client) SSEClientTransportOption {
 	return func(t *sseClientTransport) {
 		t.client = client
 	}
 }
 
+// WithSSEClientOptionLogger 设置自定义日志记录器
+// 输入参数：
+// - log: 日志记录器实例
+// 返回值：
+// - SSEClientTransportOption: 配置函数
+// [重要] 日志记录器必须实现pkg.Logger接口
 func WithSSEClientOptionLogger(log pkg.Logger) SSEClientTransportOption {
 	return func(t *sseClientTransport) {
 		t.logger = log
 	}
 }
 
+// sseClientTransport 实现基于SSE的客户端传输
+// 结构体字段说明：
+// - ctx: 上下文控制传输生命周期
+// - cancel: 取消函数
+// - serverURL: 服务器URL
+// - endpointChan: 端点通知通道
+// - messageEndpoint: 消息端点URL
+// - receiver: 消息接收器
+// - logger: 日志记录器
+// - receiveTimeout: 接收超时时间
+// - client: HTTP客户端
+// - sseConnectClose: SSE连接关闭信号
+// [注意] 所有字段访问需要同步控制
 type sseClientTransport struct {
 	ctx    context.Context
 	cancel context.CancelFunc
@@ -52,6 +93,18 @@ type sseClientTransport struct {
 	sseConnectClose chan struct{}
 }
 
+// NewSSEClientTransport 创建新的SSE客户端传输实例
+// 输入参数：
+// - serverURL: 服务器URL
+// - opts: 配置选项
+// 返回值：
+// - ClientTransport: 传输接口实例
+// - error: 创建错误
+// 功能说明：
+// 1. 解析服务器URL
+// 2. 应用配置选项
+// 3. 初始化传输结构体
+// [重要] 服务器URL必须有效
 func NewSSEClientTransport(serverURL string, opts ...SSEClientTransportOption) (ClientTransport, error) {
 	parsedURL, err := url.Parse(serverURL)
 	if err != nil {
@@ -80,6 +133,13 @@ func NewSSEClientTransport(serverURL string, opts ...SSEClientTransportOption) (
 	return x, nil
 }
 
+// Start 启动SSE客户端传输
+// 返回值：
+// - error: 启动错误
+// 功能说明：
+// 1. 建立SSE连接
+// 2. 启动消息接收协程
+// [注意] 只能调用一次
 func (t *sseClientTransport) Start() error {
 	errChan := make(chan error, 1)
 	go func() {
@@ -127,6 +187,13 @@ func (t *sseClientTransport) Start() error {
 
 // readSSE continuously reads the SSE stream and processes events.
 // It runs until the connection is closed or an error occurs.
+// readSSE 读取SSE流数据
+// 输入参数：
+// - reader: 读取器
+// 功能说明：
+// 1. 解析SSE事件格式
+// 2. 分发到对应处理器
+// [注意] 需要处理连接中断
 func (t *sseClientTransport) readSSE(reader io.ReadCloser) {
 	defer func() {
 		_ = reader.Close()
@@ -176,6 +243,14 @@ func (t *sseClientTransport) readSSE(reader io.ReadCloser) {
 
 // handleSSEEvent processes SSE events based on their type.
 // Handles 'endpoint' events for connection setup and 'message' events for JSON-RPC communication.
+// handleSSEEvent 处理SSE事件
+// 输入参数：
+// - event: 事件类型
+// - data: 事件数据
+// 功能说明：
+// 1. 处理endpoint事件建立消息通道
+// 2. 处理message事件转发消息
+// [重要] 事件类型必须有效
 func (t *sseClientTransport) handleSSEEvent(event, data string) {
 	switch event {
 	case "endpoint":
@@ -197,6 +272,16 @@ func (t *sseClientTransport) handleSSEEvent(event, data string) {
 	}
 }
 
+// Send 发送消息到服务器
+// 输入参数：
+// - ctx: 上下文
+// - msg: 消息内容
+// 返回值：
+// - error: 发送错误
+// 功能说明：
+// 1. 构造HTTP请求
+// 2. 发送消息
+// [注意] 需要有效的消息端点
 func (t *sseClientTransport) Send(ctx context.Context, msg Message) error {
 	t.logger.Debugf("Sending message: %s to %s", msg, t.messageEndpoint.String())
 
@@ -225,10 +310,24 @@ func (t *sseClientTransport) Send(ctx context.Context, msg Message) error {
 	return nil
 }
 
+// SetReceiver 设置消息接收器
+// 输入参数：
+// - receiver: 接收器实例
+// 功能说明：
+// 1. 设置消息处理回调
+// [重要] 接收器必须实现clientReceiver接口
 func (t *sseClientTransport) SetReceiver(receiver clientReceiver) {
 	t.receiver = receiver
 }
 
+// Close 关闭SSE客户端传输
+// 返回值：
+// - error: 关闭错误
+// 功能说明：
+// 1. 取消上下文
+// 2. 等待接收协程退出
+// 3. 关闭连接
+// [注意] 确保资源释放
 func (t *sseClientTransport) Close() error {
 	t.cancel()
 

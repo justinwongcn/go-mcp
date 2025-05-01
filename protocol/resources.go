@@ -9,40 +9,45 @@ import (
 	"github.com/ThinkInAIXYZ/go-mcp/pkg"
 )
 
-// ListResourcesRequest Sent from the client to request a list of resources the server has.
+// ListResourcesRequest 客户端发送的请求，用于获取服务器拥有的资源列表
 type ListResourcesRequest struct{}
 
-// ListResourcesResult The server's response to a resources/list request from the client.
+// ListResourcesResult 服务器对客户端resources/list请求的响应
+// Resources: 资源列表
+// NextCursor: 不透明的分页令牌，表示最后返回结果后的分页位置(可选)
+// [注意] 如果存在NextCursor，表示可能还有更多结果可用
 type ListResourcesResult struct {
-	Resources []Resource `json:"resources"`
-	/**
-	 * An opaque token representing the pagination position after the last returned result.
-	 * If present, there may be more results available.
-	 */
-	NextCursor string `json:"nextCursor,omitempty"`
+	Resources  []Resource `json:"resources"`
+	NextCursor string     `json:"nextCursor,omitempty"`
 }
 
-// ListResourceTemplatesRequest represents a request to list resource templates
+// ListResourceTemplatesRequest 表示列出资源模板的请求
 type ListResourceTemplatesRequest struct{}
 
-// ListResourceTemplatesResult represents the response to a list resource templates request
+// ListResourceTemplatesResult 表示列出资源模板的响应
+// ResourceTemplates: 资源模板列表
+// NextCursor: 下一页游标(可选)
 type ListResourceTemplatesResult struct {
 	ResourceTemplates []ResourceTemplate `json:"resourceTemplates"`
 	NextCursor        string             `json:"nextCursor,omitempty"`
 }
 
-// ReadResourceRequest represents a request to read a specific resource
+// ReadResourceRequest 表示读取特定资源的请求
+// URI: 资源URI
+// Arguments: 参数键值对(内部使用)
 type ReadResourceRequest struct {
 	URI       string                 `json:"uri"`
 	Arguments map[string]interface{} `json:"-"`
 }
 
-// ReadResourceResult The server's response to a resources/read request from the client.
+// ReadResourceResult 服务器对客户端resources/read请求的响应
+// Contents: 资源内容列表
 type ReadResourceResult struct {
 	Contents []ResourceContents `json:"contents"`
 }
 
-// UnmarshalJSON implements the json.Unmarshaler interface for ReadResourceResult
+// UnmarshalJSON 实现json.Unmarshaler接口
+// [重要] 该方法用于处理不同类型的资源内容
 func (r *ReadResourceResult) UnmarshalJSON(data []byte) error {
 	type Alias ReadResourceResult
 	aux := &struct {
@@ -57,14 +62,14 @@ func (r *ReadResourceResult) UnmarshalJSON(data []byte) error {
 
 	r.Contents = make([]ResourceContents, len(aux.Contents))
 	for i, content := range aux.Contents {
-		// Try to unmarshal content as TextResourceContents first
+		// 尝试解析为文本资源内容
 		var textContent TextResourceContents
 		if err := pkg.JSONUnmarshal(content, &textContent); err == nil {
 			r.Contents[i] = textContent
 			continue
 		}
 
-		// Try to unmarshal content as BlobResourceContents
+		// 尝试解析为二进制资源内容
 		var blobContent BlobResourceContents
 		if err := pkg.JSONUnmarshal(content, &blobContent); err == nil {
 			r.Contents[i] = blobContent
@@ -77,20 +82,19 @@ func (r *ReadResourceResult) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-// Resource  A known resource that the server is capable of reading.
+// Resource 服务器能够读取的已知资源
+// Name: 资源的人类可读名称，可用于填充UI元素
+// URI: 资源URI
+// Description: 资源描述(可选)，可用于改进LLM对可用资源的理解
+// MimeType: 资源的MIME类型(可选)
+// Size: 资源大小(可选)
 type Resource struct {
 	Annotated
-	// Name A human-readable name for this resource. This can be used by clients to populate UI elements.
-	Name string `json:"name"`
-	// URI The URI of this resource.
-	URI string `json:"uri"`
-	// Description A description of what this resource represents.
-	// This can be used by clients to improve the LLM's understanding of available resources.
-	// It can be thought of like a "hint" to the model.
+	Name        string `json:"name"`
+	URI         string `json:"uri"`
 	Description string `json:"description,omitempty"`
-	// MimeType The MIME type of this resource, if known.
-	MimeType string `json:"mimeType,omitempty"`
-	Size     int64  `json:"size,omitempty"`
+	MimeType    string `json:"mimeType,omitempty"`
+	Size        int64  `json:"size,omitempty"`
 }
 
 type ResourceTemplate struct {

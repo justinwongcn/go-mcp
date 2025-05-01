@@ -6,6 +6,13 @@ import (
 	"testing"
 )
 
+// Test_Validate 测试JSON Schema验证功能
+// [重要] 本测试验证以下核心功能：
+// 1. 基本类型验证(string/number/integer/boolean/null)
+// 2. 枚举值验证
+// 3. 数组类型验证
+// 4. 对象类型验证(包括嵌套对象)
+// 5. 必填字段验证
 func Test_Validate(t *testing.T) {
 	type args struct {
 		data   any
@@ -226,6 +233,12 @@ func Test_Validate(t *testing.T) {
 	}
 }
 
+// TestUnmarshal 测试JSON Schema验证与反序列化功能
+// [注意] 验证schema验证与JSON反序列化的集成逻辑
+// 测试场景包括：
+// 1. 基本类型反序列化
+// 2. 必填字段检查
+// 3. 类型不匹配处理
 func TestUnmarshal(t *testing.T) {
 	type args struct {
 		schema  Property
@@ -307,6 +320,13 @@ func TestUnmarshal(t *testing.T) {
 	}
 }
 
+// TestVerifyAndUnmarshal 测试完整的验证与反序列化流程
+// [设计决策] 使用缓存schema提高性能
+// 测试场景包括：
+// 1. 正常用例验证
+// 2. 枚举值验证
+// 3. 类型转换验证
+// 4. 匿名结构体处理
 func TestVerifyAndUnmarshal(t *testing.T) {
 	type testData struct {
 		String  string  `json:"string"`           // required

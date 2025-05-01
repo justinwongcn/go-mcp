@@ -5,7 +5,22 @@ import (
 	"testing"
 )
 
+// TestGenerateSchemaFromReqStruct 测试从请求结构体生成JSON Schema的功能
+// [重要] 本测试验证以下核心功能：
+// 1. 基本类型(string/number/integer/boolean)的schema生成
+// 2. 枚举类型的校验逻辑
+// 3. 嵌套匿名结构体的处理
+// 4. 必填字段的标记逻辑
 func TestGenerateSchemaFromReqStruct(t *testing.T) {
+	// testData 测试数据结构体
+	// [注意] 包含各种类型的字段用于测试schema生成功能
+	// - String: 必填字符串字段，带描述
+	// - Number: 可选数字字段
+	// - Integer: 忽略字段(不参与schema生成)
+	// - String4Enum: 可选字符串枚举字段
+	// - Integer4Enum: 可选整数枚举字段
+	// - Number4Enum: 可选数字枚举字段
+	// - Number4Enum2: 可选数字(整数)枚举字段
 	type testData struct {
 		String  string  `json:"string" description:"string"` // required
 		Number  float64 `json:"number,omitempty"`            // optional
@@ -272,6 +287,12 @@ func TestGenerateSchemaFromReqStruct(t *testing.T) {
 }
 
 // compareInputSchema Compare the contents of two InputSchema structures instead of comparing pointer addresses
+// compareInputSchema 比较两个InputSchema结构是否相同
+// [设计决策] 使用深度比较而非指针比较，确保测试准确性
+// 比较逻辑：
+// 1. 类型(Type)必须相同
+// 2. 必填字段(Required)必须相同(顺序无关)
+// 3. 属性(Properties)必须完全相同
 func compareInputSchema(a, b *InputSchema) bool {
 	if a == nil && b == nil {
 		return true
@@ -317,6 +338,14 @@ func compareInputSchema(a, b *InputSchema) bool {
 }
 
 // compareProperty Compare the contents of two Property structures
+// compareProperty 比较两个Property结构是否相同
+// [注意] 递归比较所有嵌套属性
+// 比较逻辑：
+// 1. 类型(Type)和描述(Description)必须相同
+// 2. 子项(Items)必须递归相同
+// 3. 属性(Properties)必须递归相同
+// 4. 必填字段(Required)必须相同(顺序无关)
+// 5. 枚举值(Enum)必须相同(顺序无关)
 func compareProperty(a, b *Property) bool {
 	if a == nil && b == nil {
 		return true

@@ -15,26 +15,32 @@ import (
 
 var ErrQueueNotOpened = errors.New("queue has not been opened")
 
+// State 会话状态核心结构
+// [重要] 线程安全设计：
+//   - 消息队列操作使用RWMutex保护
+//   - 其他字段通过原子操作或并发安全容器保证
+//
+// 模块功能：维护单个会话的所有状态信息
 type State struct {
-	lastActiveAt time.Time
+	lastActiveAt time.Time // 最后活跃时间戳
 
-	mu       sync.RWMutex
-	sendChan chan []byte
+	mu       sync.RWMutex // 消息队列操作锁
+	sendChan chan []byte  // 消息发送通道(有缓冲)
 
-	requestID int64
+	requestID int64 // 自增请求ID
 
-	reqID2respChan cmap.ConcurrentMap[string, chan *protocol.JSONRPCResponse]
+	reqID2respChan cmap.ConcurrentMap[string, chan *protocol.JSONRPCResponse] // 请求ID到响应通道的映射
 
-	// cache client initialize request info
-	clientInfo         *protocol.Implementation
-	clientCapabilities *protocol.ClientCapabilities
+	// 客户端初始化信息缓存
+	clientInfo         *protocol.Implementation     // 客户端实现信息
+	clientCapabilities *protocol.ClientCapabilities // 客户端能力声明
 
-	// subscribed resources
-	subscribedResources cmap.ConcurrentMap[string, struct{}]
+	// 订阅资源集合
+	subscribedResources cmap.ConcurrentMap[string, struct{}] // 资源URI集合
 
-	receivedInitRequest *pkg.AtomicBool
-	ready               *pkg.AtomicBool
-	closed              *pkg.AtomicBool
+	receivedInitRequest *pkg.AtomicBool // 是否收到初始化请求
+	ready               *pkg.AtomicBool // 会话是否就绪
+	closed              *pkg.AtomicBool // 会话是否已关闭
 }
 
 func NewState() *State {
@@ -48,6 +54,15 @@ func NewState() *State {
 	}
 }
 
+// SetClientInfo 设置客户端信息
+// 参数说明：
+//   - ClientInfo: 客户端实现详情
+//   - ClientCapabilities: 客户端支持的能力
+//
+// 典型用例：
+//   - 在初始化请求处理时调用
+//
+// [注意] 非线程安全，应在会话初始化阶段调用
 func (s *State) SetClientInfo(ClientInfo *protocol.Implementation, ClientCapabilities *protocol.ClientCapabilities) {
 	s.clientInfo = ClientInfo
 	s.clientCapabilities = ClientCapabilities
@@ -109,6 +124,20 @@ func (s *State) openMessageQueueForSend() {
 	}
 }
 
+// enqueueMessage 消息入队
+// 参数说明：
+//   - ctx: 上下文，用于超时控制
+//   - message: 要发送的原始消息
+//
+// 返回值：
+//   - error: 发送失败原因
+//
+// 设计决策：
+//   - 使用读锁保护通道操作
+//   - 优先检查会话状态避免无效操作
+//
+// 性能提示：
+//   - 通道操作可能阻塞，需结合上下文超时控制
 func (s *State) enqueueMessage(ctx context.Context, message []byte) error {
 	s.mu.RLock()
 	defer s.mu.RUnlock()

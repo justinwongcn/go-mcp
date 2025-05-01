@@ -12,10 +12,36 @@ import (
 	"github.com/ThinkInAIXYZ/go-mcp/transport"
 )
 
+// handleRequestWithPing 处理Ping请求
+// 返回值：
+//   - *protocol.PingResult: 标准Ping响应
+//   - error: 错误信息
+//
+// 功能说明：
+//   - 返回默认Ping响应，用于客户端连接检测
 func (server *Server) handleRequestWithPing() (*protocol.PingResult, error) {
 	return protocol.NewPingResult(), nil
 }
 
+// handleRequestWithInitialize 处理初始化请求
+// 参数说明：
+//   - ctx: 上下文，可能包含特殊会话ID返回键
+//   - sessionID: 现有会话ID（可能为空）
+//   - rawParams: 原始请求参数
+//
+// 返回值：
+//   - *protocol.InitializeResult: 初始化结果
+//   - error: 错误信息
+//
+// 核心流程：
+//  1. 解析请求参数
+//  2. 验证协议版本兼容性
+//  3. 创建新会话（如需）
+//  4. 设置客户端信息
+//  5. 返回服务器能力信息
+//
+// [重要] 会话管理：
+//   - 通过transport.SessionIDForReturnKey特殊上下文键处理新会话创建
 func (server *Server) handleRequestWithInitialize(ctx context.Context, sessionID string, rawParams json.RawMessage) (*protocol.InitializeResult, error) {
 	var request *protocol.InitializeRequest
 	if err := pkg.JSONUnmarshal(rawParams, &request); err != nil {
@@ -226,6 +252,24 @@ func (server *Server) handleRequestWithListTools(rawParams json.RawMessage) (*pr
 	return &protocol.ListToolsResult{Tools: tools}, nil
 }
 
+// handleRequestWithCallTool 处理工具调用请求
+// 参数说明：
+//   - ctx: 上下文
+//   - rawParams: 原始请求参数
+//
+// 返回值：
+//   - *protocol.CallToolResult: 工具调用结果
+//   - error: 错误信息
+//
+// 前置条件：
+//  1. 服务器必须支持工具功能
+//  2. 请求的工具必须已注册
+//
+// 典型用例：
+//   - 客户端调用已注册工具时触发
+//
+// [注意] 工具查找：
+//   - 使用工具名称作为唯一标识查找已注册工具
 func (server *Server) handleRequestWithCallTool(ctx context.Context, rawParams json.RawMessage) (*protocol.CallToolResult, error) {
 	if server.capabilities.Tools == nil {
 		return nil, pkg.ErrServerNotSupport

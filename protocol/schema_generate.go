@@ -9,18 +9,22 @@ import (
 	"github.com/ThinkInAIXYZ/go-mcp/pkg"
 )
 
+// DataType 定义JSON Schema支持的数据类型
+// [协议规范] 遵循JSON Schema Draft 07标准
 type DataType string
 
 const (
-	ObjectT DataType = "object"
-	Number  DataType = "number"
-	Integer DataType = "integer"
-	String  DataType = "string"
-	Array   DataType = "array"
-	Null    DataType = "null"
-	Boolean DataType = "boolean"
+	ObjectT DataType = "object"  // 对象类型
+	Number  DataType = "number"  // 数字类型(包含浮点数)
+	Integer DataType = "integer" // 整数类型
+	String  DataType = "string"  // 字符串类型
+	Array   DataType = "array"   // 数组类型
+	Null    DataType = "null"    // null类型
+	Boolean DataType = "boolean" // 布尔类型
 )
 
+// Property 定义JSON Schema的属性结构
+// [重要] 用于描述JSON数据的结构和约束条件
 type Property struct {
 	Type DataType `json:"type"`
 	// Description is the description of the schema.
@@ -35,6 +39,14 @@ type Property struct {
 
 var schemaCache = pkg.SyncMap[*InputSchema]{}
 
+// generateSchemaFromReqStruct 从请求结构体生成JSON Schema
+// [性能提示] 使用缓存机制避免重复生成相同类型的schema
+// 输入参数:
+//   - v: 可以是结构体实例或指针
+//
+// 返回值:
+//   - *InputSchema: 生成的schema
+//   - error: 类型不匹配或枚举值无效时返回错误
 func generateSchemaFromReqStruct(v any) (*InputSchema, error) {
 	t := reflect.TypeOf(v)
 	for t.Kind() != reflect.Struct {
@@ -71,6 +83,13 @@ func getTypeUUID(t reflect.Type) string {
 	return t.String()
 }
 
+// reflectSchemaByObject 通过反射从结构体类型生成Property
+// [算法说明] 递归处理结构体字段，生成完整的属性定义
+// 处理逻辑:
+// 1. 解析json标签确定字段名和是否必填
+// 2. 根据字段类型生成对应的Property
+// 3. 处理description和enum标签
+// 4. 校验枚举值与字段类型的兼容性
 func reflectSchemaByObject(t reflect.Type) (*Property, error) {
 	var (
 		properties     = make(map[string]*Property)
@@ -153,6 +172,13 @@ func reflectSchemaByObject(t reflect.Type) (*Property, error) {
 	return property, nil
 }
 
+// reflectSchemaByType 通过反射从类型生成Property
+// [注意] 处理所有支持的基本类型和复合类型
+// 支持的类型包括:
+// - 基本类型: string, number, integer, boolean
+// - 复合类型: array, object
+// - 特殊类型: null
+// 不支持的复杂类型会返回错误
 func reflectSchemaByType(t reflect.Type) (*Property, error) {
 	s := &Property{}
 

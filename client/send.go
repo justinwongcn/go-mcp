@@ -10,6 +10,14 @@ import (
 	"github.com/ThinkInAIXYZ/go-mcp/protocol"
 )
 
+// sendMsgWithRequest 发送请求消息
+// ctx: 上下文
+// requestID: 请求ID
+// method: 请求方法
+// params: 请求参数
+// 返回: 错误信息
+// 1. 创建JSON-RPC请求对象
+// 2. 序列化并发送消息
 func (client *Client) sendMsgWithRequest(ctx context.Context, requestID protocol.RequestID, method protocol.Method, params protocol.ClientRequest) error {
 	if requestID == nil {
 		return fmt.Errorf("requestID can't is nil")
@@ -33,6 +41,13 @@ func (client *Client) sendMsgWithRequest(ctx context.Context, requestID protocol
 	return nil
 }
 
+// sendMsgWithResponse 发送响应消息
+// ctx: 上下文
+// requestID: 请求ID
+// result: 响应结果
+// 返回: 错误信息
+// 1. 创建JSON-RPC响应对象
+// 2. 序列化并发送消息
 func (client *Client) sendMsgWithResponse(ctx context.Context, requestID protocol.RequestID, result protocol.ClientResponse) error {
 	if requestID == nil {
 		return fmt.Errorf("requestID can't is nil")
@@ -51,6 +66,13 @@ func (client *Client) sendMsgWithResponse(ctx context.Context, requestID protoco
 	return nil
 }
 
+// sendMsgWithNotification 发送通知消息
+// ctx: 上下文
+// method: 通知方法
+// params: 通知参数
+// 返回: 错误信息
+// 1. 创建JSON-RPC通知对象
+// 2. 序列化并发送消息
 func (client *Client) sendMsgWithNotification(ctx context.Context, method protocol.Method, params protocol.ClientNotify) error {
 	notify := protocol.NewJSONRPCNotification(method, params)
 
@@ -65,6 +87,14 @@ func (client *Client) sendMsgWithNotification(ctx context.Context, method protoc
 	return nil
 }
 
+// sendMsgWithError 发送错误响应
+// ctx: 上下文
+// requestID: 请求ID
+// code: 错误码
+// msg: 错误消息
+// 返回: 错误信息
+// 1. 创建JSON-RPC错误响应对象
+// 2. 序列化并发送消息
 func (client *Client) sendMsgWithError(ctx context.Context, requestID protocol.RequestID, code int, msg string) error {
 	if requestID == nil {
 		return fmt.Errorf("requestID can't is nil")

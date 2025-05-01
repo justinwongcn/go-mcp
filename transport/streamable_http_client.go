@@ -1,3 +1,13 @@
+// Package transport 提供基于HTTP的可流式客户端传输实现
+// [模块功能] 通过HTTP协议实现客户端与服务端的双向通信
+// [项目定位] 属于go-mcp核心传输层，支持远程HTTP通信场景
+// [版本历史]
+// v1.0.0 2023-05-15 初始版本 支持基础HTTP通信
+// v1.1.0 2023-06-20 增加SSE流式支持
+// [依赖说明]
+// - github.com/ThinkInAIXYZ/go-mcp/pkg >= v1.2.0
+// [典型调用]
+// transport.NewStreamableHTTPClientTransport("http://localhost:8080/mcp")
 package transport
 
 import (
@@ -15,46 +25,77 @@ import (
 	"github.com/ThinkInAIXYZ/go-mcp/pkg"
 )
 
+// sessionIDHeader 会话ID的HTTP头字段名
+// [协议规范] 遵循MCP协议v1.0规范
 const sessionIDHeader = "Mcp-Session-Id"
 
+// eventIDHeader SSE事件ID头字段(保留未使用)
 // const eventIDHeader = "Last-Event-ID"
 
+// StreamableHTTPClientTransportOption 客户端传输配置函数类型
+// [设计决策] 采用函数选项模式实现灵活配置
 type StreamableHTTPClientTransportOption func(*streamableHTTPClientTransport)
 
+// WithStreamableHTTPClientOptionReceiveTimeout 设置接收超时时间
+// 输入: timeout 超时时间
+// 输出: 配置函数
+// [性能提示] 超时设置过短可能导致频繁重连
 func WithStreamableHTTPClientOptionReceiveTimeout(timeout time.Duration) StreamableHTTPClientTransportOption {
 	return func(t *streamableHTTPClientTransport) {
 		t.receiveTimeout = timeout
 	}
 }
 
+// WithStreamableHTTPClientOptionHTTPClient 设置自定义HTTP客户端
+// 输入: client 自定义HTTP客户端
+// 输出: 配置函数
+// [安全要求] 需确保客户端配置了适当的TLS设置
 func WithStreamableHTTPClientOptionHTTPClient(client *http.Client) StreamableHTTPClientTransportOption {
 	return func(t *streamableHTTPClientTransport) {
 		t.client = client
 	}
 }
 
+// WithStreamableHTTPClientOptionLogger 设置日志记录器
+// 输入: log 日志记录器
+// 输出: 配置函数
+// [性能提示] 日志操作可能影响高并发场景性能
 func WithStreamableHTTPClientOptionLogger(log pkg.Logger) StreamableHTTPClientTransportOption {
 	return func(t *streamableHTTPClientTransport) {
 		t.logger = log
 	}
 }
 
+// streamableHTTPClientTransport HTTP可流式客户端传输实现
+// [重要] 线程安全设计，支持并发调用
 type streamableHTTPClientTransport struct {
-	ctx    context.Context
-	cancel context.CancelFunc
+	ctx    context.Context    // 上下文控制
+	cancel context.CancelFunc // 取消函数
 
-	serverURL *url.URL
-	receiver  clientReceiver
-	sessionID *pkg.AtomicString
+	serverURL *url.URL          // 服务端URL
+	receiver  clientReceiver    // 消息接收处理器
+	sessionID *pkg.AtomicString // 会话ID(原子操作)
 
-	// options
-	logger         pkg.Logger
-	receiveTimeout time.Duration
-	client         *http.Client
+	// 配置选项
+	logger         pkg.Logger    // 日志记录器
+	receiveTimeout time.Duration // 接收超时时间
+	client         *http.Client  // HTTP客户端
 
-	sseInFlyConnect sync.WaitGroup
+	sseInFlyConnect sync.WaitGroup // SSE连接等待组
 }
 
+// NewStreamableHTTPClientTransport 创建HTTP可流式客户端传输实例
+// 输入:
+// - serverURL 服务端URL地址
+// - opts 可选配置函数
+// 输出:
+// - ClientTransport接口实例
+// - 错误信息(URL解析失败等)
+// [典型用例]
+// 连接远程MCP服务:
+// transport.NewStreamableHTTPClientTransport("http://example.com/mcp")
+// [副作用] 会初始化HTTP客户端但不会自动连接
+// [兼容性] 要求服务端支持SSE协议
 func NewStreamableHTTPClientTransport(serverURL string, opts ...StreamableHTTPClientTransportOption) (ClientTransport, error) {
 	parsedURL, err := url.Parse(serverURL)
 	if err != nil {

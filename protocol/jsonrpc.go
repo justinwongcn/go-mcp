@@ -6,21 +6,29 @@ import (
 	"github.com/ThinkInAIXYZ/go-mcp/pkg"
 )
 
+// JSON-RPC协议版本号
 const jsonrpcVersion = "2.0"
 
 // Standard JSON-RPC error codes
 const (
-	ParseError     = -32700 // Invalid JSON
-	InvalidRequest = -32600 // The JSON sent is not a valid Request object
-	MethodNotFound = -32601 // The method does not exist / is not available
-	InvalidParams  = -32602 // Invalid method parameter(s)
-	InternalError  = -32603 // Internal JSON-RPC error
+	ParseError     = -32700 // 无效的JSON格式
+	InvalidRequest = -32600 // 发送的JSON不是有效的请求对象
+	MethodNotFound = -32601 // 方法不存在/不可用
+	InvalidParams  = -32602 // 无效的方法参数
+	InternalError  = -32603 // 内部JSON-RPC错误
 
 	// 可以定义自己的错误代码，范围在-32000 以上。
 )
 
-type RequestID interface{} // 字符串/数值
+// RequestID 定义请求ID的类型，可以是字符串或数值
+type RequestID interface{}
 
+// JSONRPCRequest 定义JSON-RPC请求结构
+// JSONRPC: 协议版本号
+// ID: 请求标识符
+// Method: 调用的方法名
+// Params: 方法参数
+// RawParams: 原始参数数据(不参与JSON序列化)
 type JSONRPCRequest struct {
 	JSONRPC   string          `json:"jsonrpc"`
 	ID        RequestID       `json:"id"`
@@ -29,6 +37,11 @@ type JSONRPCRequest struct {
 	RawParams json.RawMessage `json:"-"`
 }
 
+// UnmarshalJSON 自定义JSON反序列化方法
+// 用于处理Params字段的特殊解析需求
+// 1. 首先解析原始JSON数据到临时结构体
+// 2. 保存原始参数数据到RawParams
+// 3. 如果RawParams不为空，则进一步解析到Params字段
 func (r *JSONRPCRequest) UnmarshalJSON(data []byte) error {
 	type alias JSONRPCRequest
 	temp := &struct {
@@ -53,7 +66,11 @@ func (r *JSONRPCRequest) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-// IsValid checks if the request is valid according to JSON-RPC 2.0 spec
+// IsValid 检查请求是否符合JSON-RPC 2.0规范
+// 有效的请求必须满足:
+// 1. JSONRPC字段等于当前协议版本号
+// 2. Method字段不为空
+// 3. ID字段不为nil
 func (r *JSONRPCRequest) IsValid() bool {
 	return r.JSONRPC == jsonrpcVersion && r.Method != "" && r.ID != nil
 }

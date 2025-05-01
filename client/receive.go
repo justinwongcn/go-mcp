@@ -11,6 +11,12 @@ import (
 	"github.com/ThinkInAIXYZ/go-mcp/protocol"
 )
 
+// receive 处理接收到的消息
+// ctx: 上下文
+// msg: 原始消息字节
+// 返回: 错误信息
+// 1. 根据消息类型(通知/请求/响应)分发处理
+// 2. 异步执行实际处理逻辑
 func (client *Client) receive(_ context.Context, msg []byte) error {
 	defer pkg.Recover()
 
@@ -68,6 +74,12 @@ func (client *Client) receive(_ context.Context, msg []byte) error {
 	return nil
 }
 
+// receiveRequest 处理接收到的请求
+// ctx: 上下文
+// request: JSON-RPC请求对象
+// 返回: 错误信息
+// 1. 根据请求方法分发到对应处理器
+// 2. 处理错误并返回适当响应
 func (client *Client) receiveRequest(ctx context.Context, request *protocol.JSONRPCRequest) error {
 	var (
 		result protocol.ClientResponse
@@ -100,6 +112,11 @@ func (client *Client) receiveRequest(ctx context.Context, request *protocol.JSON
 	return client.sendMsgWithResponse(ctx, request.ID, result)
 }
 
+// receiveNotify 处理接收到的通知
+// ctx: 上下文
+// notify: JSON-RPC通知对象
+// 返回: 错误信息
+// 1. 根据通知方法分发到对应处理器
 func (client *Client) receiveNotify(ctx context.Context, notify *protocol.JSONRPCNotification) error {
 	switch notify.Method {
 	case protocol.NotificationToolsListChanged:
@@ -115,6 +132,11 @@ func (client *Client) receiveNotify(ctx context.Context, notify *protocol.JSONRP
 	}
 }
 
+// receiveResponse 处理接收到的响应
+// response: JSON-RPC响应对象
+// 返回: 错误信息
+// 1. 查找对应的响应通道
+// 2. 发送响应到通道
 func (client *Client) receiveResponse(response *protocol.JSONRPCResponse) error {
 	respChan, ok := client.reqID2respChan.Get(fmt.Sprint(response.ID))
 	if !ok {

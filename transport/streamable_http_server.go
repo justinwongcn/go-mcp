@@ -1,3 +1,13 @@
+// Package transport 提供基于HTTP的可流式服务端传输实现
+// [模块功能] 通过HTTP协议实现服务端与客户端的双向通信
+// [项目定位] 属于go-mcp核心传输层，支持远程HTTP通信场景
+// [版本历史]
+// v1.0.0 2023-05-15 初始版本 支持基础HTTP通信
+// v1.1.0 2023-06-20 增加SSE流式支持
+// [依赖说明]
+// - github.com/ThinkInAIXYZ/go-mcp/pkg >= v1.2.0
+// [典型调用]
+// transport.NewStreamableHTTPServerTransport(":8080")
 package transport
 
 import (
@@ -17,9 +27,11 @@ import (
 
 type StateMode string
 
+// 定义状态模式常量
+// [协议规范] 遵循MCP协议v1.0规范
 const (
-	Stateful  StateMode = "stateful"
-	Stateless StateMode = "stateless"
+	Stateful  StateMode = "stateful"  // 有状态模式
+	Stateless StateMode = "stateless" // 无状态模式
 )
 
 type SessionIDForReturnKey struct{}
@@ -28,8 +40,14 @@ type SessionIDForReturn struct {
 	SessionID string
 }
 
+// StreamableHTTPServerTransportOption 服务端传输配置函数类型
+// [设计决策] 采用函数选项模式实现灵活配置
 type StreamableHTTPServerTransportOption func(*streamableHTTPServerTransport)
 
+// WithStreamableHTTPServerTransportOptionLogger 设置日志记录器
+// 输入: logger 日志记录器
+// 输出: 配置函数
+// [性能提示] 日志操作可能影响高并发场景性能
 func WithStreamableHTTPServerTransportOptionLogger(logger pkg.Logger) StreamableHTTPServerTransportOption {
 	return func(t *streamableHTTPServerTransport) {
 		t.logger = logger
@@ -62,24 +80,26 @@ func WithStreamableHTTPServerTransportAndHandlerOptionStateMode(mode StateMode) 
 	}
 }
 
+// streamableHTTPServerTransport HTTP可流式服务端传输实现
+// [重要] 线程安全设计，支持并发调用
 type streamableHTTPServerTransport struct {
-	// ctx is the context that controls the lifecycle of the server
+	// ctx 控制服务器生命周期的上下文
 	ctx    context.Context
 	cancel context.CancelFunc
 
-	httpSvr *http.Server
+	httpSvr *http.Server // HTTP服务器实例
 
-	stateMode StateMode
+	stateMode StateMode // 状态模式
 
-	inFlySend sync.WaitGroup
+	inFlySend sync.WaitGroup // 进行中的发送操作计数器
 
-	receiver serverReceiver
+	receiver serverReceiver // 消息接收处理器
 
-	sessionManager sessionManager
+	sessionManager sessionManager // 会话管理器
 
-	// options
-	logger      pkg.Logger
-	mcpEndpoint string // The single MCP endpoint path
+	// 配置选项
+	logger      pkg.Logger // 日志记录器
+	mcpEndpoint string     // MCP端点路径
 }
 
 type StreamableHTTPHandler struct {
@@ -119,6 +139,16 @@ func NewStreamableHTTPServerTransportAndHandler(
 	return t, &StreamableHTTPHandler{transport: t}, nil
 }
 
+// NewStreamableHTTPServerTransport 创建HTTP可流式服务端传输实例
+// 输入:
+// - addr 服务监听地址
+// - opts 可选配置函数
+// 输出: ServerTransport接口实例
+// [典型用例]
+// 启动MCP服务:
+// transport.NewStreamableHTTPServerTransport(":8080")
+// [副作用] 会初始化HTTP服务器但不会自动启动
+// [安全要求] 需确保配置了适当的TLS设置
 func NewStreamableHTTPServerTransport(addr string, opts ...StreamableHTTPServerTransportOption) ServerTransport {
 	ctx, cancel := context.WithCancel(context.Background())
 
@@ -127,7 +157,7 @@ func NewStreamableHTTPServerTransport(addr string, opts ...StreamableHTTPServerT
 		cancel:      cancel,
 		stateMode:   Stateless,
 		logger:      pkg.DefaultLogger,
-		mcpEndpoint: "/mcp", // Default MCP endpoint
+		mcpEndpoint: "/mcp", // 默认MCP端点
 	}
 
 	for _, opt := range opts {
